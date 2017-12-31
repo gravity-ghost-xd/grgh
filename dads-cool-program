@@ -1,0 +1,52 @@
+#!/usr/bin/python3
+
+import ev3dev.ev3 as ev3
+import time
+
+class CoolInfraredSensor:
+    HEADING_CHANNEL = 0
+    DISTANCE_CHANNEL = 1
+    PROXIMITY_CHANNEL = 0
+
+    def __init__(self):
+        self.irs = ev3.InfraredSensor()
+        pass
+
+    def measure_proximity(self):
+        self.irs.mode = self.irs.MODE_IR_PROX
+        return self.irs.value(self.PROXIMITY_CHANNEL)
+
+    def take_bearing(self):
+        self.irs.mode = self.irs.MODE_IR_SEEK
+        heading = self.irs.value(self.HEADING_CHANNEL)
+        self.irs.mode = self.irs.MODE_IR_SEEK
+        distance = self.irs.value(self.DISTANCE_CHANNEL)
+
+        if self._is_bad_result(heading, distance):
+            return None
+
+        return { "heading" : heading, "distance" : distance }
+
+    def _is_bad_result(self, heading, distance):
+        return distance == -128 or (heading == 0 and distance == 100)
+
+def main():
+    sensor = CoolInfraredSensor()
+    leds = ev3.Leds()
+
+    while True:
+        bearing = sensor.take_bearing()
+
+        if bearing is None:
+            leds.set_color(leds.LEFT, leds.YELLOW, 0.5)
+            leds.set_color(leds.RIGHT, leds.YELLOW, 0.5)
+        else:
+            left_heading = max(-25, min(0, bearing["heading"]))
+            right_heading = min(25, max(0, bearing["heading"]))
+            left_brightness = left_heading / -25.0
+            right_brightness = right_heading / 25.0
+            leds.set_color(leds.LEFT, leds.GREEN, left_brightness)
+            leds.set_color(leds.RIGHT, leds.GREEN, right_brightness)
+
+if __name__ == "__main__":
+  main()
