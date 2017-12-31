@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import ev3dev.ev3 as ev3
-import time
+import ev3dev.core as ev3core
 
 class CoolInfraredSensor:
     HEADING_CHANNEL = 0
@@ -30,9 +30,29 @@ class CoolInfraredSensor:
     def _is_bad_result(self, heading, distance):
         return distance == -128 or (heading == 0 and distance == 100)
 
+class CoolMotor:
+  TARGET_SPEED_FACTOR = 0.25
+
+  def __init__(self):
+    self.lmotor = ev3core.LargeMotor(ev3.OUTPUT_B)
+    self.rmotor = ev3core.LargeMotor(ev3.OUTPUT_C)  
+    self.target_speed = self.lmotor.max_speed * self.TARGET_SPEED_FACTOR
+    self.lmotor.run_forever(speed_sp=self.target_speed)
+    self.rmotor.run_forever(speed_sp=self.target_speed)
+
+  def turn(self, left_factor, right_factor):
+    lfactor = left_factor
+    rfactor = right_factor
+    if lfactor < 0.01 and rfactor < 0.01:
+        lfactor = 1.0
+        rfactor = 1.0
+    self.lmotor.run_forever(speed_sp=self.target_speed * lfactor)
+    self.rmotor.run_forever(speed_sp=self.target_speed * rfactor)
+
 def main():
     sensor = CoolInfraredSensor()
     leds = ev3.Leds()
+    motor = CoolMotor()
 
     while True:
         bearing = sensor.take_bearing()
@@ -41,12 +61,13 @@ def main():
             leds.set_color(leds.LEFT, leds.YELLOW, 0.5)
             leds.set_color(leds.RIGHT, leds.YELLOW, 0.5)
         else:
-            left_heading = max(-25, min(0, bearing["heading"]))
-            right_heading = min(25, max(0, bearing["heading"]))
-            left_brightness = left_heading / -25.0
-            right_brightness = right_heading / 25.0
-            leds.set_color(leds.LEFT, leds.GREEN, left_brightness)
-            leds.set_color(leds.RIGHT, leds.GREEN, right_brightness)
+            right_heading = max(-25, min(0, bearing["heading"]))
+            left_heading = min(25, max(0, bearing["heading"]))
+            left_factor = left_heading / 25.0
+            right_factor = right_heading / -25.0
+            leds.set_color(leds.LEFT, leds.GREEN, left_factor)
+            leds.set_color(leds.RIGHT, leds.GREEN, right_factor)
+            motor.turn(left_factor, right_factor)
 
 if __name__ == "__main__":
   main()
