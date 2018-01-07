@@ -54,23 +54,22 @@ class LevelLeds:
         self.leds.set_color(self.RIGHT, self.GREEN, right_brightness)
 
 class HeadMotor:
-    MAX_IR_ANGLE = 45
     MAX_TURN_SEGMENT = 0.25 # Fraction of full cycle
-    TURN_ANGLE = 10
 
     def __init__(self):
         self.motor = ev3core.MediumMotor(ev3.OUTPUT_C)
         self.full_cycle = self.motor.count_per_rot
         self.initial_pos = self.motor.position
-        max_turn = self.full_cycle * self.MAX_TURN_SEGMENT
-        self.min_pos = self.initial_pos - max_turn
-        self.max_pos = self.initial_pos + max_turn
+
+        self.max_turn = self.full_cycle * self.MAX_TURN_SEGMENT
+        self.min_pos = self.initial_pos - self.max_turn
+        self.max_pos = self.initial_pos + self.max_turn
         self.position = self.initial_pos
         print("Operating a medium motor with ", self.full_cycle,
               " counts per rotation.")
 
     def turn(self, heading):
-        turn_amount = (1 if heading > 0 else -1) * self.TURN_ANGLE
+        turn_amount = heading * self.max_turn
         new_pos = self.position + turn_amount
         if (new_pos > self.min_pos and new_pos < self.max_pos):
             print("Turning for ", turn_amount, " degrees.")
@@ -81,11 +80,31 @@ class HeadMotor:
         self.position = self.motor.position
         print("Head position: ", self.position)
 
+class PidController:
+    def __init__(self, kp, ki, kd):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.prev_error = 0.0
+        self.integral = 0.0
+
+    def calculate(self, error):
+        self.integral = self._normalise(self.integral + error)
+        derivative = self._normalise((error - self.prev_error))
+        output = self.kp * error + self.ki * self.integral + \
+            self.kd * derivative
+        self.prev_error = error
+        return output
+
+    def _normalise(self, value):
+        return min(1.0, max(value, -1.0))
+
 def main():
     print("Starting...")
     sensor = CoolInfraredSensor()
     leds = LevelLeds()
     head = HeadMotor()
+    pid = PidController(0.1, 0.0, 0.0) # P, I, and D
     print("Devices initialised, entering main loop")
 
     while True:
@@ -97,7 +116,7 @@ def main():
         else:
             heading = bearing["heading"]
             leds.indicate_heading(heading)
-            head.turn(heading)
+            head.turn(pid.calculate(heading))
 
 if __name__ == "__main__":
   main()
