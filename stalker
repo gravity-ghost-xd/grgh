@@ -104,7 +104,7 @@ def main():
     sensor = CoolInfraredSensor()
     leds = LevelLeds()
     head = HeadMotor()
-    pid = PidController(0.1, 0.0, 0.0) # P, I, and D
+    pid = PidController(0.4, 0.3, 0.3) # P, I, and D
     print("Devices initialised, entering main loop")
 
     while True:
