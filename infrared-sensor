@@ -53,10 +53,65 @@ class LevelLeds:
         self.leds.set_color(self.LEFT, self.GREEN, left_brightness)
         self.leds.set_color(self.RIGHT, self.GREEN, right_brightness)
 
+class LevelLine:
+    def draw(self, heading):
+        left_width = int(max(0, heading * 1.0) * 39)
+        right_width = int(max(0, heading * -1.0) * 39)
+        padding = 39 - left_width
+        total_width = left_width + 1 + right_width
+        print(" " * padding + "*" * total_width)
+
+class OutlierFilter:
+    """Detects a single outlier value and replaces with the previous
+    value. An outlier is a value close to -1.0 or 1.0 that differs
+    from the previous two by more than configurable
+    'extreme_jump'. Any value that differs from the previous two by
+    more than 'max_jump' as also an outlier.
+    """
+    def __init__(self, extreme_jump, max_jump):
+        self.prev = [0.0, 0.0, 0.0]
+        self.extreme_jump = extreme_jump
+        self.max_jump = max_jump
+
+    def protect(self, value):
+        self.prev = self.prev[1:]
+        self.prev.append(value)
+        diff = abs(self.prev[1] - self.prev[2])
+        base_diff = abs(self.prev[0] - self.prev[2])
+        is_extreme = abs(self.prev[2]) > 0.85 \
+                     and diff > self.extreme_jump \
+                     and base_diff > self.extreme_jump
+        is_other_unsedirable = diff > self.max_jump \
+                               and base_diff > self.max_jump
+        if is_extreme or is_other_unsedirable:
+            result = self.prev[1] # value is an outlier
+        else:
+            result = self.prev[2] # value is regular
+        return result
+
+class SmoothingFilter:
+    """A low-pass filter with a configurable 'factor' (0.0 to 1.0) and
+    pre-quantised input.
+    """
+    def __init__(self, factor, quantisation_step):
+        self.factor = factor
+        self.qstep = quantisation_step
+        self.prev_result = 0.0
+
+    def smooth(self, value):
+        quantised = int(value * (1 / self.qstep)) * self.qstep
+        result = self.prev_result + \
+                 self.factor * (quantised - self.prev_result)
+        self.prev_result = result
+        return result
+
 def main():
     print("Starting...")
     sensor = CoolInfraredSensor()
+    ofilter = OutlierFilter(0.25, 0.6)
+    sfilter = SmoothingFilter(0.4, 0.25)
     leds = LevelLeds()
+    lline = LevelLine()
     print("Devices initialised, entering main loop")
 
     while True:
@@ -66,9 +121,11 @@ def main():
             print("No bearing detected.")
             leds.indicate_error()
         else:
-            heading = bearing["heading"]
+            raw_heading = bearing["heading"]
+            heading = sfilter.smooth(ofilter.protect(raw_heading))
             leds.indicate_heading(heading)
-            print("*" * (int((heading * -1.0 + 1) * 79) + 1))
+            lline.draw(heading)
+            print("raw: %4.2f, filtered: %4.2f" % (raw_heading, heading))
 
 if __name__ == "__main__":
-  main()
+    main()
